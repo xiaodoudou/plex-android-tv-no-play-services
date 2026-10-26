@@ -33,16 +33,18 @@ The JavaScript side doesn't check the same thing. It calls `RNVizbeeNativeManage
 
 ## What the patch changes
 
-Five methods of `tv.vizbee.rnreceiver.RNVizbeeNativeManager` return immediately: `init`, `setPlayerAdapter`, `resetPlayerAdapter`, `setVideoStatus` and `enableVerboseLogging`. Outside the Vizbee SDK itself, they and the guarded call above are the only code that touches Vizbee, and the native side already skips Vizbee on these devices, so casting through Vizbee stays off as it already was.
+One instruction, in `tv.vizbee.screen.api.Vizbee.initialize(String, VizbeeAppAdapter, VizbeeOptions)`. When `setApplication()` never ran, that method logs an error and throws. The patch makes it return right after the log line.
 
-`patch_plex.py` finds the class in whichever `classes*.dex` holds it, replaces the five method bodies with `return-void`, fixes the dex checksum and SHA-1, and repacks every APK of the set without the old signatures. If a later release renames those methods or changes their signatures, it stops with an error. `build_patched.sh` runs it, then aligns and signs the APKs with your key.
+Plex only calls `setApplication()` when Play services are available, so on a device that has them the patched app runs the same code as stock Plex. On a device without them, Vizbee stays uninitialized. The calls the JavaScript side makes later (`setPlayerAdapter`, `resetPlayerAdapter`) find no screen controller, and Vizbee ignores them with its own "Screen disabled" log line. Casting through Vizbee stays off there, which is what Plex's native code intends on these devices.
+
+`patch_plex.py` finds `Vizbee` in whichever `classes*.dex` holds it, replaces the `new-instance` that starts the `throw` with `return-void`, fixes the dex checksum and SHA-1, and repacks every APK of the set without the old signatures. If a later release changes that method and the pattern no longer matches, it stops with an error. `build_patched.sh` runs it, then aligns and signs the APKs with your key.
 
 ## Before you do this
 
 - The result is signed with your key, not Plex's. The first time, you have to uninstall the official app, which signs you out and clears Plex's settings on the TV.
 - Stores can't update it any more: Android rejects their installs with `INSTALL_FAILED_UPDATE_INCOMPATIBLE`. Each new Plex release needs patching again.
 - Keep the keystore. A later patched build installs over the current one, sign-in included, only if it's signed with the same key. Without it you're back to uninstalling.
-- Without Play services there are no push notifications and no in-app purchases on the TV. Logcat errors from FirebaseMessaging, the advertising ID and RnIap's billing connection are expected and don't crash anything.
+- Without Play services there are no push notifications and no in-app purchases on the TV. Logcat errors from FirebaseMessaging, the advertising ID, RnIap's billing connection and Vizbee ("Call setApplication API from Application onCreate before using initialize...") are expected and don't crash anything.
 - It's a modified copy of Plex's app for your own device. Don't share the patched APKs.
 
 ## Usage
@@ -91,6 +93,6 @@ On the Android 12 TV used here, `adb install-multiple -r -d` with the 10.30.8.42
 
 ## Tested on
 
-Plex for Android TV 2026.20.0 (versionCode 971050504) on a Sony BRAVIA KD-43X85J with China firmware: Android 12, 32-bit ARM, no Google Play services. Sign-in and playback work.
+Plex for Android TV 2026.20.0 (versionCode 971050504) on a Sony BRAVIA KD-43X85J with China firmware: Android 12, 32-bit ARM, no Google Play services. Sign-in and playback work. It hasn't been tried on a device that has Play services; there the patched instruction never runs.
 
 This project isn't affiliated with Plex.

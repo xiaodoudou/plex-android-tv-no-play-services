@@ -1,0 +1,10 @@
+# Signing keys: anyone holding yours can install a fake "update" over your patched Plex.
+*.jks
+*.keystore
+*.p12
+# Plex's APKs aren't ours to redistribute.
+*.apk
+*.apkm
+*.xapk
+*.idsig
+*.dex
